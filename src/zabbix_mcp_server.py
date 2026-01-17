@@ -172,7 +172,19 @@ def host_get(hostids: Optional[List[str]] = None,
         str: JSON formatted list of hosts with all requested data
     """
     client = get_zabbix_client()
-    params = {"output": output}
+    
+    # Ensure output includes essential fields for host identification
+    if output == "extend":
+        # When using "extend", all fields are returned including "host" and "name"
+        params = {"output": output}
+    elif isinstance(output, list):
+        # Ensure "host" is included if not already present
+        if "host" not in output:
+            output.append("host")
+        params = {"output": output}
+    else:
+        # For other formats, use as specified
+        params = {"output": output}
     
     # ID filters
     if hostids:
@@ -236,6 +248,401 @@ def host_get(hostids: Optional[List[str]] = None,
         params["sortorder"] = sortorder
     
     result = client.host.get(**params)
+    return format_response(result)
+
+
+@mcp.tool()
+def get_current_problems(hostids: Optional[List[str]] = None,
+                        groupids: Optional[List[str]] = None,
+                        severities: Optional[List[int]] = None,
+                        acknowledged: Optional[bool] = None,
+                        recent: bool = False,
+                        limit: Optional[int] = None) -> str:
+    """Get current problems from Zabbix.
+    
+    Args:
+        hostids: List of host IDs to filter by
+        groupids: List of host group IDs to filter by
+        severities: List of severity levels (0-5)
+        acknowledged: Filter by acknowledgment status
+        recent: Include recently resolved problems
+        limit: Maximum number of results
+        
+    Returns:
+        str: JSON formatted list of current problems
+    """
+    client = get_zabbix_client()
+    params = {
+        "output": "extend",
+        "source": 0,  # Trigger problems
+        "object": 0,  # Triggers
+        "selectAcknowledges": "extend",
+        "selectTags": "extend",
+        "sortfield": "eventid",
+        "sortorder": "DESC"
+    }
+    
+    if hostids:
+        params["hostids"] = hostids
+    if groupids:
+        params["groupids"] = groupids
+    if severities:
+        params["severities"] = severities
+    if acknowledged is not None:
+        params["acknowledged"] = acknowledged
+    if recent:
+        params["recent"] = recent
+    if limit:
+        params["limit"] = limit
+    
+    result = client.problem.get(**params)
+    return format_response(result)
+
+
+@mcp.tool()
+def get_host_inventory(hostids: Optional[List[str]] = None,
+                      output: Union[str, List[str]] = "extend") -> str:
+    """Get host inventory data from Zabbix.
+    
+    Args:
+        hostids: List of host IDs to retrieve inventory for
+        output: Output format (extend or list of specific fields)
+        
+    Returns:
+        str: JSON formatted host inventory data
+    """
+    client = get_zabbix_client()
+    params = {
+        "output": ["hostid", "host", "name"],
+        "selectInventory": output
+    }
+    
+    if hostids:
+        params["hostids"] = hostids
+    
+    result = client.host.get(**params)
+    return format_response(result)
+
+
+@mcp.tool()
+def get_host_interfaces(hostids: Optional[List[str]] = None,
+                       output: Union[str, List[str]] = "extend") -> str:
+    """Get host interface information from Zabbix.
+    
+    Args:
+        hostids: List of host IDs to retrieve interfaces for
+        output: Output format for interfaces (extend or list of specific fields)
+        
+    Returns:
+        str: JSON formatted host interface data
+    """
+    client = get_zabbix_client()
+    params = {
+        "output": ["hostid", "host", "name"],
+        "selectInterfaces": output
+    }
+    
+    if hostids:
+        params["hostids"] = hostids
+    
+    result = client.host.get(**params)
+    return format_response(result)
+
+
+@mcp.tool()
+def get_host_triggers(hostids: Optional[List[str]] = None,
+                     output: Union[str, List[str]] = "extend",
+                     min_severity: Optional[int] = None,
+                     only_true: bool = False) -> str:
+    """Get triggers for specific hosts from Zabbix.
+    
+    Args:
+        hostids: List of host IDs to retrieve triggers for
+        output: Output format (extend or list of specific fields)
+        min_severity: Minimum severity level (0-5)
+        only_true: Return only triggers in problem state
+        
+    Returns:
+        str: JSON formatted trigger data
+    """
+    client = get_zabbix_client()
+    params = {"output": output}
+    
+    if hostids:
+        params["hostids"] = hostids
+    if min_severity is not None:
+        params["min_severity"] = min_severity
+    if only_true:
+        params["only_true"] = only_true
+    
+    result = client.trigger.get(**params)
+    return format_response(result)
+
+
+@mcp.tool()
+def get_host_items(hostids: Optional[List[str]] = None,
+                  output: Union[str, List[str]] = "extend",
+                  monitored: Optional[bool] = None,
+                  limit: Optional[int] = None) -> str:
+    """Get items for specific hosts from Zabbix.
+    
+    Args:
+        hostids: List of host IDs to retrieve items for
+        output: Output format (extend or list of specific fields)
+        monitored: Return only enabled items on monitored hosts
+        limit: Maximum number of results
+        
+    Returns:
+        str: JSON formatted item data
+    """
+    client = get_zabbix_client()
+    params = {"output": output}
+    
+    if hostids:
+        params["hostids"] = hostids
+    if monitored is not None:
+        params["monitored"] = monitored
+    if limit:
+        params["limit"] = limit
+    
+    result = client.item.get(**params)
+    return format_response(result)
+
+
+@mcp.tool()
+def get_zabbix_version() -> str:
+    """Get Zabbix API version information.
+    
+    Returns:
+        str: JSON formatted API version
+    """
+    client = get_zabbix_client()
+    result = client.apiinfo.version()
+    return format_response({"version": result})
+
+
+@mcp.tool()
+def get_server_info() -> str:
+    """Get Zabbix server information and status.
+    
+    Returns:
+        str: JSON formatted server information
+    """
+    client = get_zabbix_client()
+    # This is a generic call - in practice, you might need specific API calls
+    version = client.apiinfo.version()
+    # Try to get user info to verify connection
+    try:
+        user_info = client.user.get(output=["userid", "username", "name", "surname"])
+        return format_response({
+            "api_version": version,
+            "connected_user": user_info[0] if user_info else None,
+            "connection_status": "connected"
+        })
+    except Exception as e:
+        return format_response({
+            "api_version": version,
+            "connection_status": "error",
+            "error": str(e)
+        })
+
+
+@mcp.tool()
+def search_hosts_by_name(name_pattern: str, 
+                        output: Union[str, List[str]] = ["hostid", "host", "name", "status"],
+                        limit: Optional[int] = None) -> str:
+    """Search hosts by name pattern.
+    
+    Args:
+        name_pattern: Pattern to search in host names (supports wildcards)
+        output: Output format (extend or list of specific fields)
+        limit: Maximum number of results
+        
+    Returns:
+        str: JSON formatted list of matching hosts
+    """
+    client = get_zabbix_client()
+    params = {
+        "output": output,
+        "search": {"name": name_pattern},
+        "searchWildcardsEnabled": True
+    }
+    
+    if limit:
+        params["limit"] = limit
+    
+    result = client.host.get(**params)
+    return format_response(result)
+
+
+@mcp.tool()
+def get_host_groups_with_hosts(groupids: Optional[List[str]] = None,
+                              output: Union[str, List[str]] = "extend",
+                              selectHosts: str = "count") -> str:
+    """Get host groups with host counts or details.
+    
+    Args:
+        groupids: List of group IDs to retrieve
+        output: Output format for groups
+        selectHosts: Host selection mode (count, extend, or specific fields)
+        
+    Returns:
+        str: JSON formatted list of host groups with host information
+    """
+    client = get_zabbix_client()
+    params = {
+        "output": output,
+        "selectHosts": selectHosts
+    }
+    
+    if groupids:
+        params["groupids"] = groupids
+    
+    result = client.hostgroup.get(**params)
+    return format_response(result)
+
+
+@mcp.tool()
+def get_alerts(alertids: Optional[List[str]] = None,
+              actionids: Optional[List[str]] = None,
+              eventids: Optional[List[str]] = None,
+              userid: Optional[str] = None,
+              output: Union[str, List[str]] = "extend",
+              time_from: Optional[int] = None,
+              time_till: Optional[int] = None,
+              limit: Optional[int] = None) -> str:
+    """Get alerts from Zabbix.
+    
+    Args:
+        alertids: List of alert IDs to retrieve
+        actionids: List of action IDs to filter by
+        eventids: List of event IDs to filter by
+        userid: User ID who received the alert
+        output: Output format (extend or list of specific fields)
+        time_from: Start time (Unix timestamp)
+        time_till: End time (Unix timestamp)
+        limit: Maximum number of results
+        
+    Returns:
+        str: JSON formatted list of alerts
+    """
+    client = get_zabbix_client()
+    params = {"output": output}
+    
+    if alertids:
+        params["alertids"] = alertids
+    if actionids:
+        params["actionids"] = actionids
+    if eventids:
+        params["eventids"] = eventids
+    if userid:
+        params["userid"] = userid
+    if time_from:
+        params["time_from"] = time_from
+    if time_till:
+        params["time_till"] = time_till
+    if limit:
+        params["limit"] = limit
+    
+    result = client.alert.get(**params)
+    return format_response(result)
+
+
+@mcp.tool()
+def get_audit_logs(userid: Optional[str] = None,
+                  action: Optional[int] = None,
+                  resourcetype: Optional[int] = None,
+                  resourceid: Optional[str] = None,
+                  output: Union[str, List[str]] = "extend",
+                  time_from: Optional[int] = None,
+                  time_till: Optional[int] = None,
+                  limit: Optional[int] = None) -> str:
+    """Get audit logs from Zabbix.
+    
+    Args:
+        userid: User ID to filter by
+        action: Action type (0=Add, 1=Update, 2=Delete, etc.)
+        resourcetype: Resource type (0=User, 4=Host, etc.)
+        resourceid: Resource ID
+        output: Output format (extend or list of specific fields)
+        time_from: Start time (Unix timestamp)
+        time_till: End time (Unix timestamp)
+        limit: Maximum number of results
+        
+    Returns:
+        str: JSON formatted list of audit log entries
+    """
+    client = get_zabbix_client()
+    params = {"output": output}
+    
+    if userid:
+        params["userid"] = userid
+    if action is not None:
+        params["action"] = action
+    if resourcetype is not None:
+        params["resourcetype"] = resourcetype
+    if resourceid:
+        params["resourceid"] = resourceid
+    if time_from:
+        params["time_from"] = time_from
+    if time_till:
+        params["time_till"] = time_till
+    if limit:
+        params["limit"] = limit
+    
+    result = client.auditlog.get(**params)
+    return format_response(result)
+
+
+@mcp.tool()
+def get_dashboard_widgets(dashboardids: Optional[List[str]] = None,
+                         output: Union[str, List[str]] = "extend") -> str:
+    """Get dashboard widgets from Zabbix.
+    
+    Args:
+        dashboardids: List of dashboard IDs to retrieve widgets for
+        output: Output format (extend or list of specific fields)
+        
+    Returns:
+        str: JSON formatted list of dashboard widgets
+    """
+    client = get_zabbix_client()
+    params = {"output": output}
+    
+    if dashboardids:
+        params["dashboardids"] = dashboardids
+    
+    result = client.dashboard.get(**params)
+    return format_response(result)
+
+
+@mcp.tool()
+def get_scripts(scriptids: Optional[List[str]] = None,
+               groupids: Optional[List[str]] = None,
+               hostids: Optional[List[str]] = None,
+               output: Union[str, List[str]] = "extend") -> str:
+    """Get global scripts from Zabbix.
+    
+    Args:
+        scriptids: List of script IDs to retrieve
+        groupids: List of host group IDs to filter by
+        hostids: List of host IDs to filter by
+        output: Output format (extend or list of specific fields)
+        
+    Returns:
+        str: JSON formatted list of scripts
+    """
+    client = get_zabbix_client()
+    params = {"output": output}
+    
+    if scriptids:
+        params["scriptids"] = scriptids
+    if groupids:
+        params["groupids"] = groupids
+    if hostids:
+        params["hostids"] = hostids
+    
+    result = client.script.get(**params)
     return format_response(result)
 
 
@@ -620,8 +1027,19 @@ def item_get(itemids: Optional[List[str]] = None,
              host: Optional[str] = None,
              tags: Optional[List[Dict[str, Any]]] = None,
              evaltype: int = 0,
+             selectGraphs: Optional[str] = None,
+             selectDiscoveryRule: Optional[str] = None,
+             selectItemDiscovery: Optional[str] = None,
+             limitSelects: Optional[int] = None,
              sortfield: Optional[Union[str, List[str]]] = None,
-             sortorder: Optional[Union[str, List[str]]] = None) -> str:
+             sortorder: Optional[Union[str, List[str]]] = None,
+             searchByAny: Optional[bool] = None,
+             searchWildcardsEnabled: Optional[bool] = None,
+             startSearch: Optional[bool] = None,
+             excludeSearch: Optional[bool] = None,
+             editable: Optional[bool] = None,
+             preservekeys: Optional[bool] = None,
+             countOutput: Optional[bool] = None) -> str:
     """Get items from Zabbix with optional filtering.
     
     Args:
@@ -650,8 +1068,19 @@ def item_get(itemids: Optional[List[str]] = None,
         host: Return items from host with this technical name
         tags: Filter by tags
         evaltype: Tag evaluation method (0=And/Or, 2=Or)
+        selectGraphs: Return graphs that contain the item
+        selectDiscoveryRule: Return LLD rule that created the item
+        selectItemDiscovery: Return item discovery object
+        limitSelects: Limit number of records in subselects
         sortfield: Sort by field(s) (itemid, name, key_, delay, history, trends, type, status)
         sortorder: Sort order (ASC or DESC)
+        searchByAny: Search in any of the fields
+        searchWildcardsEnabled: Enable wildcards in search
+        startSearch: Search from beginning of field
+        excludeSearch: Exclude results matching search
+        editable: Return only items editable by current user
+        preservekeys: Preserve keys in result array
+        countOutput: Return count instead of objects
         
     Returns:
         str: JSON formatted list of items
@@ -694,6 +1123,14 @@ def item_get(itemids: Optional[List[str]] = None,
         params["selectPreprocessing"] = selectPreprocessing
     if selectValueMap:
         params["selectValueMap"] = selectValueMap
+    if selectGraphs:
+        params["selectGraphs"] = selectGraphs
+    if selectDiscoveryRule:
+        params["selectDiscoveryRule"] = selectDiscoveryRule
+    if selectItemDiscovery:
+        params["selectItemDiscovery"] = selectItemDiscovery
+    if limitSelects:
+        params["limitSelects"] = limitSelects
     
     # Boolean flags
     if webitems:
@@ -723,6 +1160,22 @@ def item_get(itemids: Optional[List[str]] = None,
         params["sortfield"] = sortfield
     if sortorder:
         params["sortorder"] = sortorder
+    
+    # Additional options
+    if searchByAny is not None:
+        params["searchByAny"] = searchByAny
+    if searchWildcardsEnabled is not None:
+        params["searchWildcardsEnabled"] = searchWildcardsEnabled
+    if startSearch is not None:
+        params["startSearch"] = startSearch
+    if excludeSearch is not None:
+        params["excludeSearch"] = excludeSearch
+    if editable is not None:
+        params["editable"] = editable
+    if preservekeys is not None:
+        params["preservekeys"] = preservekeys
+    if countOutput is not None:
+        params["countOutput"] = countOutput
     
     result = client.item.get(**params)
     return format_response(result)

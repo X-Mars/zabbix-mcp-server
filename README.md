@@ -16,12 +16,19 @@ A comprehensive Model Context Protocol (MCP) server for Zabbix integration using
 - `host_create` - Create new hosts with interfaces and templates
 - `host_update` - Update existing host configurations
 - `host_delete` - Remove hosts from monitoring
+- `get_all_host_names` - Get a simple list of all host names
+- `get_host_inventory` - Retrieve host inventory data
+- `get_host_interfaces` - Get host interface information
+- `get_host_triggers` - Retrieve triggers for specific hosts
+- `get_host_items` - Get items for specific hosts
+- `search_hosts_by_name` - Search hosts by name pattern
 
 ### 👥 Host Group Management
 - `hostgroup_get` - Retrieve host groups
 - `hostgroup_create` - Create new host groups
 - `hostgroup_update` - Modify existing host groups
 - `hostgroup_delete` - Remove host groups
+- `get_host_groups_with_hosts` - Get host groups with host counts/details
 
 ### 📊 Item Management
 - `item_get` - Retrieve monitoring items with filtering
@@ -45,6 +52,7 @@ A comprehensive Model Context Protocol (MCP) server for Zabbix integration using
 - `problem_get` - Retrieve current problems and issues
 - `event_get` - Get historical events
 - `event_acknowledge` - Acknowledge events and problems
+- `get_current_problems` - Get current active problems
 
 ### 📈 Data Retrieval
 - `history_get` - Access historical monitoring data
@@ -74,6 +82,13 @@ A comprehensive Model Context Protocol (MCP) server for Zabbix integration using
 - `itemprototype_get` - Retrieve item prototypes
 - `configuration_export` - Export Zabbix configurations
 - `configuration_import` - Import configurations
+- `usermacro_get` - Get global macros
+- `get_zabbix_version` - Get API version information
+- `get_server_info` - Get server status and connection info
+- `get_alerts` - Retrieve alert notifications
+- `get_audit_logs` - Get audit log entries
+- `get_dashboard_widgets` - Retrieve dashboard configurations
+- `get_scripts` - Get global scripts
 - `apiinfo_version` - Get API version information
 
 ## Installation
