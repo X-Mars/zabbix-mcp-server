@@ -311,7 +311,7 @@ def host_get(hostids: Optional[List[str]] = None,
 @mcp.tool()
 def get_current_problems(hostids: Optional[List[str]] = None,
                         groupids: Optional[List[str]] = None,
-                        severities: Optional[List[int]] = None,
+                        severities: Optional[Union[int, List[int], str, List[str]]] = None,
                         acknowledged: Optional[bool] = None,
                         recent: bool = False,
                         suppressed: Optional[bool] = None,
@@ -321,7 +321,7 @@ def get_current_problems(hostids: Optional[List[str]] = None,
     Args:
         hostids: List of host IDs to filter by
         groupids: List of host group IDs to filter by
-        severities: List of severity levels (0=Not classified, 1=Information, 2=Warning, 3=Average, 4=High, 5=Disaster)
+        severities: Severity levels to filter (0-5). Can be single int, list of ints, or comma-separated string like "1,2,3,4,5"
         acknowledged: Filter by acknowledgment status (True=acknowledged only, False=unacknowledged only)
         recent: Include recently resolved problems (default: False returns UNRESOLVED only)
         suppressed: Filter by suppression status (True=suppressed only, False=unsuppressed only)
@@ -346,9 +346,20 @@ def get_current_problems(hostids: Optional[List[str]] = None,
         params["hostids"] = hostids
     if groupids:
         params["groupids"] = groupids
+    
+    # Severity filter - convert to list of integers
     if severities is not None:
-        # severities accepts integer or array of integers
-        params["severities"] = severities
+        if isinstance(severities, int):
+            params["severities"] = [severities]
+        elif isinstance(severities, str):
+            # Handle comma-separated string like "1,2,3,4,5"
+            params["severities"] = [int(s.strip()) for s in severities.split(",") if s.strip().isdigit()]
+        elif isinstance(severities, list):
+            # Convert all elements to integers
+            params["severities"] = [int(s) for s in severities]
+        else:
+            params["severities"] = severities
+    
     if acknowledged is not None:
         params["acknowledged"] = acknowledged
     if recent:
@@ -1837,7 +1848,7 @@ def problem_get(eventids: Optional[List[str]] = None,
                 action_userids: Optional[List[str]] = None,
                 suppressed: Optional[bool] = None,
                 symptom: Optional[bool] = None,
-                severities: Optional[List[int]] = None,
+                severities: Optional[Union[int, List[int], str, List[str]]] = None,
                 tags: Optional[List[Dict[str, Any]]] = None,
                 evaltype: int = 0,
                 selectAcknowledges: Optional[str] = None,
@@ -1869,13 +1880,13 @@ def problem_get(eventids: Optional[List[str]] = None,
         action_userids: Return only problems with actions performed by these user IDs
         suppressed: Filter by suppression status (True=suppressed only, False=unsuppressed only)
         symptom: Filter symptom problems (True=symptoms only, False=causes only)
-        severities: List of severity levels to filter by (0=Not classified, 1=Information, 2=Warning, 3=Average, 4=High, 5=Disaster)
+        severities: Severity levels to filter (0-5). Can be single int, list of ints, or comma-separated string like "1,2,3,4,5"
         tags: Filter by tags (format: [{"tag": "name", "value": "value", "operator": 0}])
         evaltype: Tag evaluation method (0=And/Or, 2=Or)
         selectAcknowledges: Return acknowledgment details (use "extend")
         selectTags: Return problem tags (use "extend")
         selectSuppressionData: Return suppression data (use "extend")
-        sortfield: Sort by field - ONLY "eventid" is supported
+        sortfield: Sort by field - ONLY "eventid" is supported (other values will be ignored)
         sortorder: Sort order (ASC or DESC)
         limit: Maximum number of results
         
@@ -1923,9 +1934,18 @@ def problem_get(eventids: Optional[List[str]] = None,
     if symptom is not None:
         params["symptom"] = symptom
     
-    # Severity filter - accepts integer or array of integers
+    # Severity filter - convert to list of integers
     if severities is not None:
-        params["severities"] = severities
+        if isinstance(severities, int):
+            params["severities"] = [severities]
+        elif isinstance(severities, str):
+            # Handle comma-separated string like "1,2,3,4,5"
+            params["severities"] = [int(s.strip()) for s in severities.split(",") if s.strip().isdigit()]
+        elif isinstance(severities, list):
+            # Convert all elements to integers
+            params["severities"] = [int(s) for s in severities]
+        else:
+            params["severities"] = severities
     
     # Tag filtering
     if tags:
@@ -1942,13 +1962,8 @@ def problem_get(eventids: Optional[List[str]] = None,
     
     # Sorting and limit - problem.get ONLY supports "eventid" as sortfield
     if sortfield:
-        # Validate sortfield - only eventid is allowed
-        if isinstance(sortfield, str):
-            if sortfield != "eventid":
-                sortfield = "eventid"  # Force to valid value
-        elif isinstance(sortfield, list):
-            sortfield = ["eventid"]  # Force to valid value
-        params["sortfield"] = sortfield
+        # Validate sortfield - only eventid is allowed, ignore others
+        params["sortfield"] = "eventid"
     if sortorder:
         params["sortorder"] = sortorder
     if limit:
