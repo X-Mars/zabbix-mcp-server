@@ -116,6 +116,7 @@ def host_get(hostids: Optional[List[str]] = None,
              groupids: Optional[List[str]] = None,
              templateids: Optional[List[str]] = None,
              proxyids: Optional[List[str]] = None,
+             maintenanceids: Optional[List[str]] = None,
              output: Union[str, List[str]] = "extend",
              search: Optional[Dict[str, str]] = None,
              filter: Optional[Dict[str, Any]] = None,
@@ -128,23 +129,38 @@ def host_get(hostids: Optional[List[str]] = None,
              selectTriggers: Optional[str] = None,
              selectTags: Optional[str] = None,
              selectMacros: Optional[str] = None,
+             selectDiscoveries: Optional[str] = None,
+             selectGraphs: Optional[str] = None,
+             selectHttpTests: Optional[str] = None,
+             selectDashboards: Optional[str] = None,
+             selectValueMaps: Optional[str] = None,
              monitored_hosts: bool = False,
              with_items: bool = False,
              with_triggers: bool = False,
              with_monitored_items: bool = False,
              with_monitored_triggers: bool = False,
+             with_httptests: bool = False,
+             with_monitored_httptests: bool = False,
+             with_graphs: bool = False,
+             withProblemsSuppressed: Optional[bool] = None,
              severities: Optional[List[int]] = None,
              tags: Optional[List[Dict[str, Any]]] = None,
+             inheritedTags: bool = False,
              evaltype: int = 0,
+             searchInventory: Optional[Dict[str, str]] = None,
              sortfield: Optional[Union[str, List[str]]] = None,
              sortorder: Optional[Union[str, List[str]]] = None) -> str:
     """Get hosts from Zabbix with optional filtering.
+    
+    Note: maintenance_status is an OUTPUT field, not an input parameter.
+    It will be included when output="extend" is used.
     
     Args:
         hostids: List of host IDs to retrieve
         groupids: List of host group IDs to filter by
         templateids: List of template IDs to filter by
         proxyids: List of proxy IDs to filter by
+        maintenanceids: List of maintenance IDs to filter by (hosts affected by these maintenances)
         output: Output format (extend or list of specific fields like ["hostid", "host", "name", "status"])
         search: Search criteria (e.g., {"name": "server"} for partial match)
         filter: Filter criteria (e.g., {"status": 0} for enabled hosts)
@@ -157,15 +173,26 @@ def host_get(hostids: Optional[List[str]] = None,
         selectTriggers: Return host triggers (use "extend" or "count")
         selectTags: Return host tags (use "extend" to get all fields)
         selectMacros: Return host macros (use "extend" to get all fields)
+        selectDiscoveries: Return host LLD rules (use "extend" or "count")
+        selectGraphs: Return host graphs (use "extend" or "count")
+        selectHttpTests: Return host web scenarios (use "extend" or "count")
+        selectDashboards: Return dashboards (use "extend" or "count")
+        selectValueMaps: Return host value maps (use "extend")
         monitored_hosts: Return only monitored hosts
         with_items: Return only hosts that have items
         with_triggers: Return only hosts that have triggers
         with_monitored_items: Return only hosts with enabled items
         with_monitored_triggers: Return only hosts with enabled triggers
+        with_httptests: Return only hosts with web checks
+        with_monitored_httptests: Return only hosts with enabled web checks
+        with_graphs: Return only hosts with graphs
+        withProblemsSuppressed: Filter hosts with suppressed problems (True/False/None)
         severities: Filter by problem severities (0-5)
         tags: Filter by tags (format: [{"tag": "name", "value": "value", "operator": 0}])
+        inheritedTags: Return hosts that have given tags also in all linked templates
         evaltype: Tag evaluation method (0=And/Or, 2=Or)
-        sortfield: Sort by field(s) (hostid, host, name, status)
+        searchInventory: Search by inventory fields (e.g., {"os": "Linux"})
+        sortfield: Sort by field(s) - ONLY hostid, host, name, status are supported
         sortorder: Sort order (ASC or DESC)
         
     Returns:
@@ -195,12 +222,16 @@ def host_get(hostids: Optional[List[str]] = None,
         params["templateids"] = templateids
     if proxyids:
         params["proxyids"] = proxyids
+    if maintenanceids:
+        params["maintenanceids"] = maintenanceids
     
     # Search and filter
     if search:
         params["search"] = search
     if filter:
         params["filter"] = filter
+    if searchInventory:
+        params["searchInventory"] = searchInventory
     if limit:
         params["limit"] = limit
     
@@ -221,6 +252,16 @@ def host_get(hostids: Optional[List[str]] = None,
         params["selectTags"] = selectTags
     if selectMacros:
         params["selectMacros"] = selectMacros
+    if selectDiscoveries:
+        params["selectDiscoveries"] = selectDiscoveries
+    if selectGraphs:
+        params["selectGraphs"] = selectGraphs
+    if selectHttpTests:
+        params["selectHttpTests"] = selectHttpTests
+    if selectDashboards:
+        params["selectDashboards"] = selectDashboards
+    if selectValueMaps:
+        params["selectValueMaps"] = selectValueMaps
     
     # Boolean flags
     if monitored_hosts:
@@ -233,16 +274,32 @@ def host_get(hostids: Optional[List[str]] = None,
         params["with_monitored_items"] = with_monitored_items
     if with_monitored_triggers:
         params["with_monitored_triggers"] = with_monitored_triggers
+    if with_httptests:
+        params["with_httptests"] = with_httptests
+    if with_monitored_httptests:
+        params["with_monitored_httptests"] = with_monitored_httptests
+    if with_graphs:
+        params["with_graphs"] = with_graphs
+    if withProblemsSuppressed is not None:
+        params["withProblemsSuppressed"] = withProblemsSuppressed
     
     # Tag filtering
-    if severities:
+    if severities is not None:
         params["severities"] = severities
     if tags:
         params["tags"] = tags
         params["evaltype"] = evaltype
+    if inheritedTags:
+        params["inheritedTags"] = inheritedTags
     
-    # Sorting
+    # Sorting - host.get ONLY supports hostid, host, name, status
     if sortfield:
+        valid_sortfields = ["hostid", "host", "name", "status"]
+        if isinstance(sortfield, str):
+            if sortfield not in valid_sortfields:
+                sortfield = "name"  # Default to valid field
+        elif isinstance(sortfield, list):
+            sortfield = [f for f in sortfield if f in valid_sortfields] or ["name"]
         params["sortfield"] = sortfield
     if sortorder:
         params["sortorder"] = sortorder
@@ -257,15 +314,17 @@ def get_current_problems(hostids: Optional[List[str]] = None,
                         severities: Optional[List[int]] = None,
                         acknowledged: Optional[bool] = None,
                         recent: bool = False,
+                        suppressed: Optional[bool] = None,
                         limit: Optional[int] = None) -> str:
     """Get current problems from Zabbix.
     
     Args:
         hostids: List of host IDs to filter by
         groupids: List of host group IDs to filter by
-        severities: List of severity levels (0-5)
-        acknowledged: Filter by acknowledgment status
-        recent: Include recently resolved problems
+        severities: List of severity levels (0=Not classified, 1=Information, 2=Warning, 3=Average, 4=High, 5=Disaster)
+        acknowledged: Filter by acknowledgment status (True=acknowledged only, False=unacknowledged only)
+        recent: Include recently resolved problems (default: False returns UNRESOLVED only)
+        suppressed: Filter by suppression status (True=suppressed only, False=unsuppressed only)
         limit: Maximum number of results
         
     Returns:
@@ -278,7 +337,8 @@ def get_current_problems(hostids: Optional[List[str]] = None,
         "object": 0,  # Triggers
         "selectAcknowledges": "extend",
         "selectTags": "extend",
-        "sortfield": "eventid",
+        "selectSuppressionData": "extend",
+        "sortfield": ["eventid"],  # problem.get only supports eventid for sortfield
         "sortorder": "DESC"
     }
     
@@ -286,12 +346,15 @@ def get_current_problems(hostids: Optional[List[str]] = None,
         params["hostids"] = hostids
     if groupids:
         params["groupids"] = groupids
-    if severities:
+    if severities is not None:
+        # severities accepts integer or array of integers
         params["severities"] = severities
     if acknowledged is not None:
         params["acknowledged"] = acknowledged
     if recent:
         params["recent"] = recent
+    if suppressed is not None:
+        params["suppressed"] = suppressed
     if limit:
         params["limit"] = limit
     
@@ -1770,6 +1833,8 @@ def problem_get(eventids: Optional[List[str]] = None,
                 eventid_till: Optional[str] = None,
                 recent: bool = False,
                 acknowledged: Optional[bool] = None,
+                action: Optional[int] = None,
+                action_userids: Optional[List[str]] = None,
                 suppressed: Optional[bool] = None,
                 symptom: Optional[bool] = None,
                 severities: Optional[List[int]] = None,
@@ -1783,6 +1848,9 @@ def problem_get(eventids: Optional[List[str]] = None,
                 limit: Optional[int] = None) -> str:
     """Get problems from Zabbix with optional filtering.
     
+    Note: This method returns unresolved problems. Use recent=True to also include
+    recently resolved problems. For older resolved problems, use event_get.
+    
     Args:
         eventids: List of event IDs to retrieve
         groupids: List of host group IDs to filter by
@@ -1795,8 +1863,10 @@ def problem_get(eventids: Optional[List[str]] = None,
         time_till: End time (Unix timestamp)
         eventid_from: Return problems with event IDs >= this value
         eventid_till: Return problems with event IDs <= this value
-        recent: Include recently resolved problems
+        recent: Include recently resolved problems (default: False returns UNRESOLVED only)
         acknowledged: Filter by acknowledgment status (True=acknowledged only, False=unacknowledged only)
+        action: Return only problems for which the given event update actions have been performed
+        action_userids: Return only problems with actions performed by these user IDs
         suppressed: Filter by suppression status (True=suppressed only, False=unsuppressed only)
         symptom: Filter symptom problems (True=symptoms only, False=causes only)
         severities: List of severity levels to filter by (0=Not classified, 1=Information, 2=Warning, 3=Average, 4=High, 5=Disaster)
@@ -1805,7 +1875,7 @@ def problem_get(eventids: Optional[List[str]] = None,
         selectAcknowledges: Return acknowledgment details (use "extend")
         selectTags: Return problem tags (use "extend")
         selectSuppressionData: Return suppression data (use "extend")
-        sortfield: Sort by field(s) (eventid)
+        sortfield: Sort by field - ONLY "eventid" is supported
         sortorder: Sort order (ASC or DESC)
         limit: Maximum number of results
         
@@ -1844,13 +1914,17 @@ def problem_get(eventids: Optional[List[str]] = None,
         params["recent"] = recent
     if acknowledged is not None:
         params["acknowledged"] = acknowledged
+    if action is not None:
+        params["action"] = action
+    if action_userids:
+        params["action_userids"] = action_userids
     if suppressed is not None:
         params["suppressed"] = suppressed
     if symptom is not None:
         params["symptom"] = symptom
     
-    # Severity filter
-    if severities:
+    # Severity filter - accepts integer or array of integers
+    if severities is not None:
         params["severities"] = severities
     
     # Tag filtering
@@ -1866,8 +1940,14 @@ def problem_get(eventids: Optional[List[str]] = None,
     if selectSuppressionData:
         params["selectSuppressionData"] = selectSuppressionData
     
-    # Sorting and limit
+    # Sorting and limit - problem.get ONLY supports "eventid" as sortfield
     if sortfield:
+        # Validate sortfield - only eventid is allowed
+        if isinstance(sortfield, str):
+            if sortfield != "eventid":
+                sortfield = "eventid"  # Force to valid value
+        elif isinstance(sortfield, list):
+            sortfield = ["eventid"]  # Force to valid value
         params["sortfield"] = sortfield
     if sortorder:
         params["sortorder"] = sortorder
@@ -2273,14 +2353,35 @@ def proxy_delete(proxyids: List[str]) -> str:
 def maintenance_get(maintenanceids: Optional[List[str]] = None,
                     groupids: Optional[List[str]] = None,
                     hostids: Optional[List[str]] = None,
-                    output: Union[str, List[str]] = "extend") -> str:
+                    output: Union[str, List[str]] = "extend",
+                    selectHostGroups: Optional[str] = None,
+                    selectHosts: Optional[str] = None,
+                    selectTags: Optional[str] = None,
+                    selectTimeperiods: Optional[str] = None,
+                    sortfield: Optional[Union[str, List[str]]] = None,
+                    sortorder: Optional[Union[str, List[str]]] = None,
+                    search: Optional[Dict[str, str]] = None,
+                    filter: Optional[Dict[str, Any]] = None,
+                    limit: Optional[int] = None) -> str:
     """Get maintenance periods from Zabbix.
+    
+    Note: active_since and active_till are OUTPUT fields, not input parameters.
+    Use filter parameter to filter by these fields if needed.
     
     Args:
         maintenanceids: List of maintenance IDs to retrieve
-        groupids: List of host group IDs to filter by
-        hostids: List of host IDs to filter by
+        groupids: List of host group IDs that are assigned to the maintenance
+        hostids: List of host IDs that are assigned to the maintenance
         output: Output format (extend or list of specific fields)
+        selectHostGroups: Return host groups assigned to the maintenance (use "extend")
+        selectHosts: Return hosts assigned to the maintenance (use "extend")
+        selectTags: Return problem tags of the maintenance (use "extend")
+        selectTimeperiods: Return time periods of the maintenance (use "extend")
+        sortfield: Sort by field(s) - supports: maintenanceid, name, maintenance_type, active_since, active_till
+        sortorder: Sort order (ASC or DESC)
+        search: Search criteria (e.g., {"name": "maintenance"})
+        filter: Filter criteria (e.g., {"maintenance_type": 0})
+        limit: Maximum number of results
         
     Returns:
         str: JSON formatted list of maintenance periods
@@ -2294,6 +2395,31 @@ def maintenance_get(maintenanceids: Optional[List[str]] = None,
         params["groupids"] = groupids
     if hostids:
         params["hostids"] = hostids
+    
+    # Select related data
+    if selectHostGroups:
+        params["selectHostGroups"] = selectHostGroups
+    if selectHosts:
+        params["selectHosts"] = selectHosts
+    if selectTags:
+        params["selectTags"] = selectTags
+    if selectTimeperiods:
+        params["selectTimeperiods"] = selectTimeperiods
+    
+    # Search and filter
+    if search:
+        params["search"] = search
+    if filter:
+        params["filter"] = filter
+    
+    # Sorting
+    if sortfield:
+        params["sortfield"] = sortfield
+    if sortorder:
+        params["sortorder"] = sortorder
+    
+    if limit:
+        params["limit"] = limit
     
     result = client.maintenance.get(**params)
     return format_response(result)
