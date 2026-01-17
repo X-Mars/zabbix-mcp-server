@@ -1012,8 +1012,14 @@ def hostgroup_get(groupids: Optional[List[str]] = None,
     if with_monitored_triggers:
         params["with_monitored_triggers"] = with_monitored_triggers
     
-    # Sorting
+    # Sorting - hostgroup.get only supports groupid, name
     if sortfield:
+        valid_sortfields = ["groupid", "name"]
+        if isinstance(sortfield, str):
+            if sortfield not in valid_sortfields:
+                sortfield = "name"
+        elif isinstance(sortfield, list):
+            sortfield = [f for f in sortfield if f in valid_sortfields] or ["name"]
         params["sortfield"] = sortfield
     if sortorder:
         params["sortorder"] = sortorder
@@ -1229,8 +1235,14 @@ def item_get(itemids: Optional[List[str]] = None,
         params["tags"] = tags
         params["evaltype"] = evaltype
     
-    # Sorting
+    # Sorting - item.get supports: itemid, name, key_, delay, history, trends, type, status
     if sortfield:
+        valid_sortfields = ["itemid", "name", "key_", "delay", "history", "trends", "type", "status"]
+        if isinstance(sortfield, str):
+            if sortfield not in valid_sortfields:
+                sortfield = "name"
+        elif isinstance(sortfield, list):
+            sortfield = [f for f in sortfield if f in valid_sortfields] or ["name"]
         params["sortfield"] = sortfield
     if sortorder:
         params["sortorder"] = sortorder
@@ -1500,8 +1512,14 @@ def trigger_get(triggerids: Optional[List[str]] = None,
         params["tags"] = tags
         params["evaltype"] = evaltype
     
-    # Sorting
+    # Sorting - trigger.get supports: triggerid, description, status, priority, lastchange, hostname
     if sortfield:
+        valid_sortfields = ["triggerid", "description", "status", "priority", "lastchange", "hostname"]
+        if isinstance(sortfield, str):
+            if sortfield not in valid_sortfields:
+                sortfield = "description"
+        elif isinstance(sortfield, list):
+            sortfield = [f for f in sortfield if f in valid_sortfields] or ["description"]
         params["sortfield"] = sortfield
     if sortorder:
         params["sortorder"] = sortorder
@@ -1741,8 +1759,14 @@ def template_get(templateids: Optional[List[str]] = None,
         params["tags"] = tags
         params["evaltype"] = evaltype
     
-    # Sorting
+    # Sorting - template.get supports: hostid, host, name, status
     if sortfield:
+        valid_sortfields = ["hostid", "host", "name", "status"]
+        if isinstance(sortfield, str):
+            if sortfield not in valid_sortfields:
+                sortfield = "name"
+        elif isinstance(sortfield, list):
+            sortfield = [f for f in sortfield if f in valid_sortfields] or ["name"]
         params["sortfield"] = sortfield
     if sortorder:
         params["sortorder"] = sortorder
@@ -1980,8 +2004,26 @@ def event_get(eventids: Optional[List[str]] = None,
               hostids: Optional[List[str]] = None,
               objectids: Optional[List[str]] = None,
               output: Union[str, List[str]] = "extend",
+              source: int = 0,
+              object: int = 0,
+              acknowledged: Optional[bool] = None,
+              suppressed: Optional[bool] = None,
+              severities: Optional[Union[int, List[int], str, List[str]]] = None,
               time_from: Optional[int] = None,
               time_till: Optional[int] = None,
+              eventid_from: Optional[str] = None,
+              eventid_till: Optional[str] = None,
+              selectAcknowledges: Optional[str] = None,
+              selectAlerts: Optional[str] = None,
+              selectHosts: Optional[str] = None,
+              selectRelatedObject: Optional[str] = None,
+              selectSuppressionData: Optional[str] = None,
+              selectTags: Optional[str] = None,
+              tags: Optional[List[Dict[str, Any]]] = None,
+              evaltype: int = 0,
+              value: Optional[Union[int, List[int]]] = None,
+              sortfield: Optional[Union[str, List[str]]] = None,
+              sortorder: Optional[Union[str, List[str]]] = None,
               limit: Optional[int] = None) -> str:
     """Get events from Zabbix with optional filtering.
     
@@ -1991,8 +2033,26 @@ def event_get(eventids: Optional[List[str]] = None,
         hostids: List of host IDs to filter by
         objectids: List of object IDs to filter by
         output: Output format (extend or list of specific fields)
+        source: Event source (0=trigger, 1=discovery, 2=autoregistration, 3=internal, 4=service)
+        object: Event object type (0=trigger, 4=item, 5=LLD rule, 6=service)
+        acknowledged: Filter by acknowledgment status
+        suppressed: Filter by suppression status
+        severities: Filter by severity levels (0-5)
         time_from: Start time (Unix timestamp)
         time_till: End time (Unix timestamp)
+        eventid_from: Return events with IDs >= this value
+        eventid_till: Return events with IDs <= this value
+        selectAcknowledges: Return acknowledgment details (use "extend")
+        selectAlerts: Return alerts generated by event (use "extend")
+        selectHosts: Return hosts that triggered the event (use "extend")
+        selectRelatedObject: Return the object that created the event
+        selectSuppressionData: Return suppression data (use "extend")
+        selectTags: Return event tags (use "extend")
+        tags: Filter by tags
+        evaltype: Tag evaluation method (0=And/Or, 2=Or)
+        value: Filter by event values
+        sortfield: Sort by field(s) - ONLY eventid, objectid, clock are supported
+        sortorder: Sort order (ASC or DESC)
         limit: Maximum number of results
         
     Returns:
@@ -2001,6 +2061,7 @@ def event_get(eventids: Optional[List[str]] = None,
     client = get_zabbix_client()
     params = {"output": output}
     
+    # ID filters
     if eventids:
         params["eventids"] = eventids
     if groupids:
@@ -2009,10 +2070,73 @@ def event_get(eventids: Optional[List[str]] = None,
         params["hostids"] = hostids
     if objectids:
         params["objectids"] = objectids
+    
+    # Source and object type
+    params["source"] = source
+    params["object"] = object
+    
+    # Boolean filters
+    if acknowledged is not None:
+        params["acknowledged"] = acknowledged
+    if suppressed is not None:
+        params["suppressed"] = suppressed
+    
+    # Severity filter - convert to list of integers
+    if severities is not None:
+        if isinstance(severities, int):
+            params["severities"] = [severities]
+        elif isinstance(severities, str):
+            params["severities"] = [int(s.strip()) for s in severities.split(",") if s.strip().isdigit()]
+        elif isinstance(severities, list):
+            params["severities"] = [int(s) for s in severities]
+        else:
+            params["severities"] = severities
+    
+    # Time filters
     if time_from:
         params["time_from"] = time_from
     if time_till:
         params["time_till"] = time_till
+    if eventid_from:
+        params["eventid_from"] = eventid_from
+    if eventid_till:
+        params["eventid_till"] = eventid_till
+    
+    # Value filter
+    if value is not None:
+        params["value"] = value
+    
+    # Select related data
+    if selectAcknowledges:
+        params["selectAcknowledges"] = selectAcknowledges
+    if selectAlerts:
+        params["selectAlerts"] = selectAlerts
+    if selectHosts:
+        params["selectHosts"] = selectHosts
+    if selectRelatedObject:
+        params["selectRelatedObject"] = selectRelatedObject
+    if selectSuppressionData:
+        params["selectSuppressionData"] = selectSuppressionData
+    if selectTags:
+        params["selectTags"] = selectTags
+    
+    # Tag filtering
+    if tags:
+        params["tags"] = tags
+        params["evaltype"] = evaltype
+    
+    # Sorting - event.get supports: eventid, objectid, clock
+    if sortfield:
+        valid_sortfields = ["eventid", "objectid", "clock"]
+        if isinstance(sortfield, str):
+            if sortfield not in valid_sortfields:
+                sortfield = "clock"
+        elif isinstance(sortfield, list):
+            sortfield = [f for f in sortfield if f in valid_sortfields] or ["clock"]
+        params["sortfield"] = sortfield
+    if sortorder:
+        params["sortorder"] = sortorder
+    
     if limit:
         params["limit"] = limit
     
@@ -2064,13 +2188,19 @@ def history_get(itemids: List[str], history: int = 0,
         time_from: Start time (Unix timestamp)
         time_till: End time (Unix timestamp)
         limit: Maximum number of results
-        sortfield: Field to sort by
+        sortfield: Field to sort by - ONLY itemid, clock, ns are supported
         sortorder: Sort order (ASC or DESC)
         
     Returns:
         str: JSON formatted history data
     """
     client = get_zabbix_client()
+    
+    # Validate sortfield - history.get only supports itemid, clock, ns
+    valid_sortfields = ["itemid", "clock", "ns"]
+    if sortfield not in valid_sortfields:
+        sortfield = "clock"
+    
     params = {
         "itemids": itemids,
         "history": history,
@@ -2427,8 +2557,14 @@ def maintenance_get(maintenanceids: Optional[List[str]] = None,
     if filter:
         params["filter"] = filter
     
-    # Sorting
+    # Sorting - maintenance.get supports: maintenanceid, name, maintenance_type, active_since, active_till
     if sortfield:
+        valid_sortfields = ["maintenanceid", "name", "maintenance_type", "active_since", "active_till"]
+        if isinstance(sortfield, str):
+            if sortfield not in valid_sortfields:
+                sortfield = "name"
+        elif isinstance(sortfield, list):
+            sortfield = [f for f in sortfield if f in valid_sortfields] or ["name"]
         params["sortfield"] = sortfield
     if sortorder:
         params["sortorder"] = sortorder
